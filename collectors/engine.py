@@ -1,18 +1,16 @@
 import json
 import asyncio
 import aiohttp
-import random
 
 from loguru import logger
 from fake_useragent import UserAgent
-from db_model.interface_db import db_insert
+from db_model.interface_db import db_insert, aio_db_insert
 from utils.methods import pay_method_bybit, coin_paxful, type_trade_bybit
 
 
 async def p2p_parser_binance(session: aiohttp.ClientSession, url: str, headers: dict,
-                             json_data: dict, proxy: dict) -> None:
+                             json_data: dict, proxy: dict, proxy_auth, connect) -> None:
     try:
-        proxy_auth = aiohttp.BasicAuth(proxy['user'], proxy['pass'])
         async with session.post(url=url, headers=headers, json=json_data, ssl=False,
                                 proxy_auth=proxy_auth, proxy=proxy['url']) as response_session:
             assert response_session.status == 200
@@ -27,8 +25,8 @@ async def p2p_parser_binance(session: aiohttp.ClientSession, url: str, headers: 
             data['trade_type'] = json_data['tradeType']
             data['exchange_id'] = 1
 
-            logger.debug(f"req Binance: {json_data['page']} | {data['coin']} | {data['currency']} | "
-                         f"{data['trade_type']} | {proxy['name']}")
+            # logger.debug(f"req Binance: {json_data['page']} | {data['coin']} | {data['currency']} | "
+            #              f"{data['trade_type']} | {proxy['name']}")
 
             for element in cards:
 
@@ -46,19 +44,24 @@ async def p2p_parser_binance(session: aiohttp.ClientSession, url: str, headers: 
                 for method in element['adv']['tradeMethods']:
                     data['pay_methods'].append(method['identifier'])
 
-                db_insert(data=data)
+                db_insert(connection=connect, data=data)
+                # await aio_db_insert(data=data)
 
     except AssertionError:
-        logger.info(f'Request retry Binance.')
+        pass
+    except ConnectionError as ex:
+        logger.error(f'Parser-Binance | ConnectionError | {ex}')
+    except TimeoutError:
+        logger.error('Parser-Binance | TimeoutError')
     except aiohttp.client_exceptions.ClientOSError as ex:
-        logger.error(f"Parser by Binance | {ex}\n{json_data['page']} | {json_data['asset']} | {json_data['fiat']} | "
-                         f"{json_data['tradeType']} | {proxy['name']}")
+        logger.error(f'Parser-Binance | ClientOSError | {ex}')
+    except aiohttp.client_exceptions.ClientProxyConnectionError as ex:
+        logger.error(f'Parser-Binance | ClientProxyConnectionError | {ex}')
 
 
 async def p2p_parser_bybit(session: aiohttp.ClientSession, url: str, headers: dict,
-                           json_data: dict, type_trade: str, proxy: dict) -> None:
+                           json_data: dict, type_trade: str, proxy: dict, proxy_auth, connect) -> None:
     try:
-        proxy_auth = aiohttp.BasicAuth(proxy['user'], proxy['pass'])
         async with session.post(url=url, headers=headers, json=json_data, ssl=False,
                                 proxy_auth=proxy_auth, proxy=proxy['url']) as response_session:
             assert response_session.status == 200
@@ -73,8 +76,8 @@ async def p2p_parser_bybit(session: aiohttp.ClientSession, url: str, headers: di
             data['trade_type'] = type_trade
             data['exchange_id'] = 2
 
-            logger.debug(f"req Bybit: {json_data['page']} | {data['coin']} | {data['currency']} | "
-                         f"{data['trade_type']} | {proxy['name']}")
+            # logger.debug(f"req Bybit: {json_data['page']} | {data['coin']} | {data['currency']} | "
+            #              f"{data['trade_type']} | {proxy['name']}")
 
             for element in cards:
                 data['price'] = element['price']
@@ -91,16 +94,23 @@ async def p2p_parser_bybit(session: aiohttp.ClientSession, url: str, headers: di
                 for method in element['payments']:
                     data['pay_methods'].append(pay_method_bybit(method))
 
-                db_insert(data=data)
+                db_insert(connection=connect, data=data)
+                # await aio_db_insert(data=data)
 
     except AssertionError:
-        logger.info(f'Request retry Bybit.')
+        pass
+    except ConnectionError as ex:
+        logger.error(f'Parser-Bybit | ConnectionError | {ex}')
+    except TimeoutError:
+        logger.error('Parser-Bybit | TimeoutError')
     except aiohttp.client_exceptions.ClientOSError as ex:
-        logger.error(f'Parser by Bybit | {ex}')
+        logger.error(f'Parser-Bybit | ClientOSError | {ex}')
+    except aiohttp.client_exceptions.ClientProxyConnectionError as ex:
+        logger.error(f'Parser-Bybit | ClientProxyConnectionError | {ex}')
 
 
 async def p2p_parser_paxful(session: aiohttp.ClientSession, url: str, headers: dict,
-                            json_data: dict, proxy: dict) -> None:
+                            json_data: dict, proxy: dict, connect) -> None:
     try:
         proxy_auth = aiohttp.BasicAuth(proxy['user'], proxy['pass'])
         async with session.get(url=url, headers=headers, ssl=False,
@@ -113,8 +123,8 @@ async def p2p_parser_paxful(session: aiohttp.ClientSession, url: str, headers: d
 
             data = json_data
 
-            logger.debug(f"req Paxful: | {data['coin']} | {data['currency']} | "
-                         f"{data['trade_type']} | {proxy['name']}")
+            # logger.debug(f"req Paxful: | {data['coin']} | {data['currency']} | "
+            #              f"{data['trade_type']} | {proxy['name']}")
 
             for element in cards:
                 exchange_rate = element['fiatPricePerBtc']
@@ -129,15 +139,22 @@ async def p2p_parser_paxful(session: aiohttp.ClientSession, url: str, headers: d
                 data['pay_methods'] = element['paymentMethodName']
                 data['link'] = f"https://paxful.com/en/offer/{element['idHashed']}"
 
-                db_insert(data=data)
+                db_insert(connection=connect, data=data)
+                # await aio_db_insert(data=data)
 
     except AssertionError:
         pass
+    except ConnectionError as ex:
+        logger.error('ConnectionError')
+    except TimeoutError:
+        logger.error('Parser-Paxful | TimeoutError')
     except aiohttp.client_exceptions.ClientOSError as ex:
-        logger.error(f'Parser by Paxful | {ex}')
+        logger.error(f'Parser-Paxful | ClientOSError | {ex}')
+    except aiohttp.client_exceptions.ClientProxyConnectionError as ex:
+        logger.error(f'Parser-Paxful | ClientProxyConnectionError | {ex}')
 
 
-async def distributor_binance(coin: str, currency: str, type_trade: str, proxy: dict) -> None:
+async def distributor_binance(coin: str, currency: str, type_trade: str, proxy: dict, connect) -> None:
     try:
         url = 'https://p2p.binance.com/bapi/c2c/v2/friendly/c2c/adv/search'
         ua = UserAgent()
@@ -150,40 +167,43 @@ async def distributor_binance(coin: str, currency: str, type_trade: str, proxy: 
             "tradeType": type_trade,
             "payTypes": [],
         }
-        connector = aiohttp.TCPConnector(limit=random.randint(22, 28))
+        connector = aiohttp.TCPConnector(limit=proxy['limit'])
+        proxy_auth = aiohttp.BasicAuth(proxy['user'], proxy['pass'])
         async with aiohttp.ClientSession(connector=connector, trust_env=True) as session:
-            response = await session.post(url, headers=headers, json=json_data, ssl=False)
-            assert response.status == 200
+            async with session.post(url, headers=headers, json=json_data, ssl=False,
+                                    proxy_auth=proxy_auth, proxy=proxy['url']) as response:
+                assert response.status == 200
 
-            loader = await response.json()
+                loader = await response.json()
 
-            pagination = int(loader['total']) // 10 + 1
-            tasks = []
+                pagination = int(loader['total']) // 10 + 1
+                tasks = []
 
-            for page in range(1, pagination + 1):
-                json_data = {
-                    "page": page,
-                    "rows": 10,
-                    "asset": coin,
-                    "fiat": currency,
-                    "tradeType": type_trade
-                }
+                for page in range(1, pagination + 1):
+                    json_data = {
+                        "page": page,
+                        "rows": 10,
+                        "asset": coin,
+                        "fiat": currency,
+                        "tradeType": type_trade
+                    }
 
-                task = asyncio.create_task(p2p_parser_binance(session, url=url, headers=headers,
-                                                              json_data=json_data, proxy=proxy))
-                tasks.append(task)
+                    task = asyncio.create_task(p2p_parser_binance(session, url=url, headers=headers,
+                                                                  json_data=json_data, proxy=proxy,
+                                                                  proxy_auth=proxy_auth, connect=connect))
+                    tasks.append(task)
 
-            # logger.info(f'Count requests: {len(tasks)}')
-
-            await asyncio.gather(*tasks)
+                # logger.info(f'Count requests: {len(tasks)}')
+                await asyncio.gather(*tasks)
 
     except AssertionError:
-        logger.info(f'Request failed - Binance.')
-    except Exception as ex:
-        logger.error(f'Dist by Binance | {ex}')
+        pass
+    except (aiohttp.client_exceptions.ClientOSError, aiohttp.client_exceptions.ServerDisconnectedError,
+            aiohttp.client_exceptions.ClientHttpProxyError) as ex:
+        logger.error(f'Dist-Binance | {ex}')
 
 
-async def distributor_bybit(coin: str, currency: str, type_trade: str, proxy: dict) -> None:
+async def distributor_bybit(coin: str, currency: str, type_trade: str, proxy: dict, connect) -> None:
     try:
         url = 'https://api2.bybit.com/fiat/otc/item/online'
 
@@ -197,40 +217,47 @@ async def distributor_bybit(coin: str, currency: str, type_trade: str, proxy: di
             "page": "1",
         }
 
-        connector = aiohttp.TCPConnector(limit=random.randint(22, 28))
+        connector = aiohttp.TCPConnector(limit=proxy['limit'])
+        proxy_auth = aiohttp.BasicAuth(proxy['user'], proxy['pass'])
         async with aiohttp.ClientSession(connector=connector, trust_env=True) as session:
-            response = await session.post(url, headers=headers, json=json_data, ssl=False)
-            assert response.status == 200
+            async with session.post(url, headers=headers, json=json_data, ssl=False,
+                                    proxy_auth=proxy_auth, proxy=proxy['url']) as response:
+                assert response.status == 200
 
-            loader = await response.json()
-            pagination = loader['result']['count'] // 10 + 1
+                loader = await response.json()
+                pagination = loader['result']['count'] // 10 + 1
 
-            tasks = []
-            for page in range(1, pagination + 1):
-                json_data = {
-                    "tokenId": coin,
-                    "currencyId": currency,
-                    "payment": [],
-                    "side": type_trade_bybit(type_trade),
-                    "size": "10",
-                    "page": str(page),
-                }
+                tasks = []
+                for page in range(1, pagination + 1):
+                    json_data = {
+                        "tokenId": coin,
+                        "currencyId": currency,
+                        "payment": [],
+                        "side": type_trade_bybit(type_trade),
+                        "size": "10",
+                        "page": str(page),
+                    }
 
-                task = asyncio.create_task(p2p_parser_bybit(session, url=url, headers=headers, json_data=json_data,
-                                                            type_trade=type_trade, proxy=proxy))
-                tasks.append(task)
+                    task = asyncio.create_task(
+                        p2p_parser_bybit(session, url=url, headers=headers, json_data=json_data,
+                                         type_trade=type_trade, proxy=proxy,
+                                         proxy_auth=proxy_auth, connect=connect))
+                    tasks.append(task)
 
-            # logger.info(f'Count requests: {len(tasks)}')
+                # logger.info(f'Count requests: {len(tasks)}')
 
-            await asyncio.gather(*tasks)
+                await asyncio.gather(*tasks)
 
     except AssertionError:
-        logger.info(f'Request failed - Bybit.')
-    except Exception as ex:
-        logger.error(f'Dist by Bybit | {ex}')
+        pass
+    except TimeoutError as ex:
+        logger.error(f'Dist-Bybit | {ex}')
+    except (aiohttp.client_exceptions.ClientOSError, aiohttp.client_exceptions.ServerDisconnectedError,
+            aiohttp.client_exceptions.ClientHttpProxyError) as ex:
+        logger.error(f'Dist-Bybit | {ex}')
 
 
-async def distributor_paxful(coin: str, currency: str, type_trade: str, proxy: dict) -> None:
+async def distributor_paxful(coin: str, currency: str, type_trade: str, proxy: dict, connect) -> None:
     try:
         url = f'https://paxful.com/en/rest/v1/offers?transformResponse=camelCase&withFavorites=false&' \
               f'crypto_currency_id={coin_paxful(coin)}&is_payment_method_localized=0&visitor_country_has_changed=false&' \
@@ -247,9 +274,9 @@ async def distributor_paxful(coin: str, currency: str, type_trade: str, proxy: d
 
         # logger.info(f'Count requests: One by one')
 
-        connector = aiohttp.TCPConnector(limit=random.randint(22, 28))
+        connector = aiohttp.TCPConnector(limit=proxy['limit'])
         async with aiohttp.ClientSession(connector=connector, trust_env=True) as session:
-            await p2p_parser_paxful(session, url=url, headers=headers, json_data=data, proxy=proxy)
+            await p2p_parser_paxful(session, url=url, headers=headers, json_data=data, proxy=proxy, connect=connect)
 
     except Exception as ex:
-        logger.error(f'Dist by Paxful | {ex}')
+        logger.error(f'Dist-Paxful | {ex}')

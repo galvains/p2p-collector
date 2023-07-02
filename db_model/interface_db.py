@@ -1,42 +1,13 @@
-import psycopg2
+import aiopg
 
+from loguru import logger
 from config import database, user, password, host, port
 
 
-def db_print(connection) -> None:
+def db_insert(connection, data: dict) -> None:
     try:
-
-        with connection.cursor() as cursor:
-            cursor.execute(f"SELECT * from tickets_table")
-            print(cursor.fetchall())
-
-    except Exception as ex:
-        print(f'Error by {ex}')
-    finally:
-        if connection:
-            connection.close()
-            print('Session closed.')
-
-
-def db_insert(data: dict) -> None:
-    try:
-        connection = psycopg2.connect(database=database,
-                                      user=user,
-                                      password=password,
-                                      host=host,
-                                      port=port)
-
         with connection.cursor() as cursor:
 
-            # cursor.execute(f"""INSERT INTO tickets_table (nick_name, price, orders, available, max_limit, min_limit,
-            #                 rate, pay_methods, currency, coin, trade_type, link, exchange_id)
-            #                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
-            #                (data['nick_name'], data['price'], data['orders'], data['available'],
-            #                 data['max_limit'], data['min_limit'], data['rate'], data['pay_methods'],
-            #                 data['currency'], data['coin'], data['trade_type'], data['link'],
-            #                 data['exchange_id']))
-
-            # for paxful
             if data['exchange_id'] == 3:
                 cursor.execute(f"""INSERT INTO tickets_table (nick_name, price, orders, available, max_limit, min_limit,
                                 rate, pay_methods, currency, coin, trade_type, link, time_create, exchange_id)
@@ -59,19 +30,39 @@ def db_insert(data: dict) -> None:
                                 data['exchange_id'], data['nick_name'], data['price']))
 
             connection.commit()
-            # print('Value add')
 
     except Exception as ex:
-        print(f'Error by {ex}')
-    finally:
-        if connection:
-            connection.close()
-            # print('Session closed.')
+        logger.error(f'DB-INSERT | {ex}')
 
 
-def main():
-    db_insert()
+async def aio_db_insert(data: dict) -> None:
+    dsn = f'dbname={database} user={user} password={password} host=127.0.0.1'
+    async with aiopg.create_pool(dsn) as pool:
+        async with pool.acquire() as conn:
+            async with conn.cursor() as cur:
+                if data['exchange_id'] == 3:
+                    await cur.execute(f"""INSERT INTO tickets_table (nick_name, price, orders, available, max_limit, min_limit,
+                                rate, pay_methods, currency, coin, trade_type, link, time_create, exchange_id)
+                                SELECT %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), %s WHERE NOT EXISTS(
+                                SELECT 1 FROM tickets_table
+                                WHERE nick_name = %s AND link = %s)""",
+                                      (data['nick_name'], data['price'], data['orders'], data['available'],
+                                       data['max_limit'], data['min_limit'], data['rate'], data['pay_methods'],
+                                       data['currency'], data['coin'], data['trade_type'], data['link'],
+                                       data['exchange_id'], data['nick_name'], data['link']))
+                else:
+                    await cur.execute(f"""INSERT INTO tickets_table (nick_name, price, orders, available, max_limit, min_limit,
+                                rate, pay_methods, currency, coin, trade_type, link, time_create, exchange_id)
+                                SELECT %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), %s WHERE NOT EXISTS(
+                                SELECT 1 FROM tickets_table
+                                WHERE nick_name = %s AND price = %s)""",
+                                      (data['nick_name'], data['price'], data['orders'], data['available'],
+                                       data['max_limit'], data['min_limit'], data['rate'], data['pay_methods'],
+                                       data['currency'], data['coin'], data['trade_type'], data['link'],
+                                       data['exchange_id'], data['nick_name'], data['price']))
+                ret = []
+                async for row in cur:
+                    ret.append(row)
+                assert ret == [(1,)]
+    logger.info('all done-aio_db_insert')
 
-
-if __name__ == '__main__':
-    main()
