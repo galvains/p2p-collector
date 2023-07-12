@@ -5,7 +5,7 @@ def db_clean(connection) -> None:
     try:
         with connection.cursor() as cursor:
             cursor.execute(f"""
-                    DELETE FROM tickets_table
+                    DELETE FROM app_ticketstable
                     WHERE time_create < (NOW() - interval '1 minute');""")
 
             connection.commit()
@@ -14,3 +14,4 @@ def db_clean(connection) -> None:
 
     except Exception as ex:
         logger.error(f'DB-CLEAN | {ex}')
+        connection.rollback()

@@ -169,10 +169,15 @@ def pay_method_bybit(method: str) -> str:
     return banks[method]
 
 
-def type_trade_bybit(method: str) -> str:
-    methods = {'SELL': '0',
-               'BUY': '1'}
-    return methods[method.upper()]
+def type_trade_bybit(method):
+    methods_str = {'SELL': '0',
+                   'BUY': '1'}
+    methods_int = {'0': 'SELL',
+                   '1': 'BUY'}
+    if len(method) > 1:
+        return methods_str[method.upper()]
+    else:
+        return methods_int[method]
 
 
 def coin_paxful(coin: str) -> int:

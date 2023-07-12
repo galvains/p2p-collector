@@ -2,7 +2,7 @@ import random
 
 
 def set_proxy() -> list:
-    limit = random.randint(27, 32)
+    limit = random.randint(25, 29)
     proxies = [
         {'name': 'NED', 'user': 'KmwLCK', 'pass': 'DQL35V', 'url': 'http://168.80.203.214:8000', 'limit': limit},
         {'name': 'JP', 'user': '25EsGn', 'pass': 'U3pJVn', 'url': 'http://45.146.181.148:8000', 'limit': limit},

@@ -4,7 +4,7 @@ import aiohttp
 
 from loguru import logger
 from fake_useragent import UserAgent
-from db_model.interface_db import db_insert, aio_db_insert
+from db_model.interface_db import db_insert
 from utils.methods import pay_method_bybit, coin_paxful, type_trade_bybit
 
 
@@ -25,9 +25,6 @@ async def p2p_parser_binance(session: aiohttp.ClientSession, url: str, headers: 
             data['trade_type'] = json_data['tradeType']
             data['exchange_id'] = 1
 
-            # logger.debug(f"req Binance: {json_data['page']} | {data['coin']} | {data['currency']} | "
-            #              f"{data['trade_type']} | {proxy['name']}")
-
             for element in cards:
 
                 data['price'] = float(element['adv']['price'])
@@ -45,7 +42,6 @@ async def p2p_parser_binance(session: aiohttp.ClientSession, url: str, headers: 
                     data['pay_methods'].append(method['identifier'])
 
                 db_insert(connection=connect, data=data)
-                # await aio_db_insert(data=data)
 
     except AssertionError:
         pass
@@ -76,9 +72,6 @@ async def p2p_parser_bybit(session: aiohttp.ClientSession, url: str, headers: di
             data['trade_type'] = type_trade
             data['exchange_id'] = 2
 
-            # logger.debug(f"req Bybit: {json_data['page']} | {data['coin']} | {data['currency']} | "
-            #              f"{data['trade_type']} | {proxy['name']}")
-
             for element in cards:
                 data['price'] = element['price']
                 data['nick_name'] = element['nickName']
@@ -95,7 +88,6 @@ async def p2p_parser_bybit(session: aiohttp.ClientSession, url: str, headers: di
                     data['pay_methods'].append(pay_method_bybit(method))
 
                 db_insert(connection=connect, data=data)
-                # await aio_db_insert(data=data)
 
     except AssertionError:
         pass
@@ -123,9 +115,6 @@ async def p2p_parser_paxful(session: aiohttp.ClientSession, url: str, headers: d
 
             data = json_data
 
-            # logger.debug(f"req Paxful: | {data['coin']} | {data['currency']} | "
-            #              f"{data['trade_type']} | {proxy['name']}")
-
             for element in cards:
                 exchange_rate = element['fiatPricePerBtc']
                 data['orders'] = 0
@@ -140,7 +129,6 @@ async def p2p_parser_paxful(session: aiohttp.ClientSession, url: str, headers: d
                 data['link'] = f"https://paxful.com/en/offer/{element['idHashed']}"
 
                 db_insert(connection=connect, data=data)
-                # await aio_db_insert(data=data)
 
     except AssertionError:
         pass
@@ -179,6 +167,7 @@ async def distributor_binance(coin: str, currency: str, type_trade: str, proxy: 
                 pagination = int(loader['total']) // 10 + 1
                 tasks = []
 
+                pagination = 40 if pagination > 40 else pagination
                 for page in range(1, pagination + 1):
                     json_data = {
                         "page": page,
@@ -192,8 +181,6 @@ async def distributor_binance(coin: str, currency: str, type_trade: str, proxy: 
                                                                   json_data=json_data, proxy=proxy,
                                                                   proxy_auth=proxy_auth, connect=connect))
                     tasks.append(task)
-
-                # logger.info(f'Count requests: {len(tasks)}')
                 await asyncio.gather(*tasks)
 
     except AssertionError:
@@ -228,6 +215,8 @@ async def distributor_bybit(coin: str, currency: str, type_trade: str, proxy: di
                 pagination = loader['result']['count'] // 10 + 1
 
                 tasks = []
+
+                pagination = 40 if pagination > 40 else pagination
                 for page in range(1, pagination + 1):
                     json_data = {
                         "tokenId": coin,
@@ -243,9 +232,6 @@ async def distributor_bybit(coin: str, currency: str, type_trade: str, proxy: di
                                          type_trade=type_trade, proxy=proxy,
                                          proxy_auth=proxy_auth, connect=connect))
                     tasks.append(task)
-
-                # logger.info(f'Count requests: {len(tasks)}')
-
                 await asyncio.gather(*tasks)
 
     except AssertionError:
@@ -271,8 +257,6 @@ async def distributor_paxful(coin: str, currency: str, type_trade: str, proxy: d
         data['coin'] = coin
         data['trade_type'] = type_trade
         data['exchange_id'] = 3
-
-        # logger.info(f'Count requests: One by one')
 
         connector = aiohttp.TCPConnector(limit=proxy['limit'])
         async with aiohttp.ClientSession(connector=connector, trust_env=True) as session:

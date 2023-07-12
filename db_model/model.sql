@@ -1,5 +1,5 @@
 -- CREATE DATABASE collection_p2p_database;
-CREATE TABLE tickets_table (
+CREATE TABLE TicketsTable (
     id bigserial primary key not null,
     nick_name varchar(80) not null,
     price numeric not null,
