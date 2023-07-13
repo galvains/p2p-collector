@@ -7,30 +7,14 @@ from utils.proxies import set_proxy
 from utils.methods import type_trade_bybit
 
 
-async def manager() -> dict:
+async def manager(conf_data: dict) -> dict:
     try:
+        tickets = conf_data['tickets']
         data = {'urls': ['https://p2p.binance.com/bapi/c2c/v2/friendly/c2c/adv/search',
                          'https://api2.bybit.com/fiat/otc/item/online'],
                 'headers': {'content-type': 'application/json'},
-                'proxy': set_proxy()}
-        tickets = [
-            ['USDT', 'USD', 'BUY'],
-            ['USDT', 'USD', 'SELL'],
-            ['USDT', 'EUR', 'BUY'],
-            ['USDT', 'EUR', 'SELL'],
-            ['BTC', 'USD', 'BUY'],
-            ['BTC', 'USD', 'SELL'],
-            ['BTC', 'EUR', 'BUY'],
-            ['BTC', 'EUR', 'SELL'],
-            ['USDC', 'USD', 'BUY'],
-            ['USDC', 'USD', 'SELL'],
-            ['USDC', 'EUR', 'BUY'],
-            ['USDC', 'EUR', 'SELL'],
-            ['ETH', 'USD', 'BUY'],
-            ['ETH', 'USD', 'SELL'],
-            ['ETH', 'EUR', 'BUY'],
-            ['ETH', 'EUR', 'SELL'],
-        ]
+                'proxy': set_proxy(conf_data=conf_data)}
+
         tasks = list()
         thr = dict()
         thr['binance'], thr['bybit'], thr['paxful'] = list(), list(), list()
@@ -97,9 +81,13 @@ async def req_to_exchange(data: dict, info: dict, thr) -> list:
         logger.error(f'Task Manager - req_to_exchange | {ex}')
 
 
-async def distributor(limit_req: int, limit_exchange: int) -> None:
+async def distributor(conf_data: dict) -> None:
     try:
-        data = await manager()
+        limit_requests = conf_data['limit_requests']
+        limit_exchange = conf_data['limit_exchange']
+        _DEBUG = conf_data['DEBUG']
+
+        data = await manager(conf_data=conf_data)
 
         result_bin = [[]]
         result_byb = [[]]
@@ -107,7 +95,7 @@ async def distributor(limit_req: int, limit_exchange: int) -> None:
 
         for exchange in data:
             counter = 0
-            limit_r = limit_req
+            limit_r = limit_requests
             limit_e = limit_exchange
             for dicts in data[exchange]:
                 for key, val in dicts.items():
@@ -122,7 +110,7 @@ async def distributor(limit_req: int, limit_exchange: int) -> None:
                         else:
                             result_pax.append(list())
                             result_pax[counter].append(val)
-                        limit_r = limit_req - key
+                        limit_r = limit_requests - key
                         limit_e = limit_exchange - 1
 
                     elif key <= limit_r and limit_e:
@@ -137,7 +125,8 @@ async def distributor(limit_req: int, limit_exchange: int) -> None:
 
         thr = [result_bin, result_byb, result_pax]
         len_tasks = max(len(result_bin), len(result_byb), len(result_pax))
-
+        if _DEBUG:
+            logger.debug(f'Count of threads: {len_tasks}.')
         for thread in thr:
             while len(thread) < len_tasks:
                 thread.append(list())

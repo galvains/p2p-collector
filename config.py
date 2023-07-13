@@ -1,5 +1,0 @@
-database = "collection_p2p_database"
-user = "postgres"
-password = "51203"
-host = "localhost"
-port = "5432"

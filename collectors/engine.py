@@ -142,7 +142,7 @@ async def p2p_parser_paxful(session: aiohttp.ClientSession, url: str, headers: d
         logger.error(f'Parser-Paxful | ClientProxyConnectionError | {ex}')
 
 
-async def distributor_binance(coin: str, currency: str, type_trade: str, proxy: dict, connect) -> None:
+async def distributor_binance(coin: str, currency: str, type_trade: str, proxy: dict, connect, limit, pg_limit) -> None:
     try:
         url = 'https://p2p.binance.com/bapi/c2c/v2/friendly/c2c/adv/search'
         ua = UserAgent()
@@ -155,7 +155,7 @@ async def distributor_binance(coin: str, currency: str, type_trade: str, proxy: 
             "tradeType": type_trade,
             "payTypes": [],
         }
-        connector = aiohttp.TCPConnector(limit=proxy['limit'])
+        connector = aiohttp.TCPConnector(limit=limit)
         proxy_auth = aiohttp.BasicAuth(proxy['user'], proxy['pass'])
         async with aiohttp.ClientSession(connector=connector, trust_env=True) as session:
             async with session.post(url, headers=headers, json=json_data, ssl=False,
@@ -167,7 +167,7 @@ async def distributor_binance(coin: str, currency: str, type_trade: str, proxy: 
                 pagination = int(loader['total']) // 10 + 1
                 tasks = []
 
-                pagination = 40 if pagination > 40 else pagination
+                pagination = pg_limit if pagination > pg_limit else pagination
                 for page in range(1, pagination + 1):
                     json_data = {
                         "page": page,
@@ -185,12 +185,14 @@ async def distributor_binance(coin: str, currency: str, type_trade: str, proxy: 
 
     except AssertionError:
         pass
+    except TimeoutError as ex:
+        logger.error(f'Dist-Binance | {ex}')
     except (aiohttp.client_exceptions.ClientOSError, aiohttp.client_exceptions.ServerDisconnectedError,
             aiohttp.client_exceptions.ClientHttpProxyError) as ex:
         logger.error(f'Dist-Binance | {ex}')
 
 
-async def distributor_bybit(coin: str, currency: str, type_trade: str, proxy: dict, connect) -> None:
+async def distributor_bybit(coin: str, currency: str, type_trade: str, proxy: dict, connect, limit, pg_limit) -> None:
     try:
         url = 'https://api2.bybit.com/fiat/otc/item/online'
 
@@ -204,7 +206,7 @@ async def distributor_bybit(coin: str, currency: str, type_trade: str, proxy: di
             "page": "1",
         }
 
-        connector = aiohttp.TCPConnector(limit=proxy['limit'])
+        connector = aiohttp.TCPConnector(limit=limit)
         proxy_auth = aiohttp.BasicAuth(proxy['user'], proxy['pass'])
         async with aiohttp.ClientSession(connector=connector, trust_env=True) as session:
             async with session.post(url, headers=headers, json=json_data, ssl=False,
@@ -216,7 +218,7 @@ async def distributor_bybit(coin: str, currency: str, type_trade: str, proxy: di
 
                 tasks = []
 
-                pagination = 40 if pagination > 40 else pagination
+                pagination = pg_limit if pagination > pg_limit else pagination
                 for page in range(1, pagination + 1):
                     json_data = {
                         "tokenId": coin,
@@ -243,7 +245,7 @@ async def distributor_bybit(coin: str, currency: str, type_trade: str, proxy: di
         logger.error(f'Dist-Bybit | {ex}')
 
 
-async def distributor_paxful(coin: str, currency: str, type_trade: str, proxy: dict, connect) -> None:
+async def distributor_paxful(coin: str, currency: str, type_trade: str, proxy: dict, connect, limit) -> None:
     try:
         url = f'https://paxful.com/en/rest/v1/offers?transformResponse=camelCase&withFavorites=false&' \
               f'crypto_currency_id={coin_paxful(coin)}&is_payment_method_localized=0&visitor_country_has_changed=false&' \
@@ -258,7 +260,7 @@ async def distributor_paxful(coin: str, currency: str, type_trade: str, proxy: d
         data['trade_type'] = type_trade
         data['exchange_id'] = 3
 
-        connector = aiohttp.TCPConnector(limit=proxy['limit'])
+        connector = aiohttp.TCPConnector(limit=limit)
         async with aiohttp.ClientSession(connector=connector, trust_env=True) as session:
             await p2p_parser_paxful(session, url=url, headers=headers, json_data=data, proxy=proxy, connect=connect)
 
