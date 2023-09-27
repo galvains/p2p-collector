@@ -1,3 +1,5 @@
+import os
+
 import asyncio
 import random
 
@@ -11,6 +13,7 @@ from db_model.cleaner import db_clean
 from collectors.task_manager import distributor
 
 from .engine import distributor_binance, distributor_paxful, distributor_bybit
+from utils.methods import get_payment_methods
 
 
 class TaskManager(object):
@@ -59,13 +62,15 @@ class TaskManager(object):
 
 
 async def loader(conf_data: dict) -> None:
+    # чтение данных из файла конфигурации
     _DEBUG = conf_data['DEBUG']
 
-    db_name = conf_data['database']['name']
-    db_user = conf_data['database']['user']
-    db_pass = conf_data['database']['password']
-    db_host = conf_data['database']['host']
-    db_port = conf_data['database']['port']
+    db_name = os.getenv('CLR_DB_NAME')
+    db_user = os.getenv('CLR_DB_USER')
+    db_pass = os.getenv('CLR_DB_PASS')
+    db_host = os.getenv('CLR_DB_HOST')
+    db_port = os.getenv('CLR_DB_PORT')
+
     pg_limit = conf_data['page_limit']
     lap_of_reload = conf_data['lap_of_reload']
     delay = random.randint(conf_data['delay'][0], conf_data['delay'][1])
@@ -74,19 +79,25 @@ async def loader(conf_data: dict) -> None:
     logger.info(f'Pool created... | Debug mod: {_DEBUG}')
     counter_laps = 1
 
+    # запуск цикла парсинга
     while True:
         try:
             logger.info(f'Lap: {counter_laps} started...')
 
+            # чистка базы данных
             with psycopg2.connect(database=db_name, user=db_user, password=db_pass, host=db_host, port=db_port) as conn:
                 db_clean(conn)
 
+            # запуск дистрибьютора (на первый круг и кратный указанному в конфигурации)
             if counter_laps == 1 or counter_laps % lap_of_reload == 0:
+                get_payment_methods()
                 await distributor(conf_data=conf_data)
 
+            # конфиг тредов (из дистрибьютора)
             with open('threads.data', 'rb') as file:
                 threads_data = pickle.load(file)
 
+            # список тредов и вызов прокси
             thr_list = list()
             proxies = set_proxy(conf_data=conf_data)
 
@@ -95,6 +106,7 @@ async def loader(conf_data: dict) -> None:
             pax_tasks = threads_data[2]
             len_tasks = max(len(bin_tasks), len(byb_tasks), len(pax_tasks))
 
+            # создание объектов таск_менеджера (bin, byb, pax | bin, byb ...)
             for elem in range(len_tasks):
                 data = (bin_tasks[elem], byb_tasks[elem], pax_tasks[elem])
                 thr_list.append(TaskManager(proxy_data=proxies[elem], threads_data=data, number=elem))
@@ -104,6 +116,7 @@ async def loader(conf_data: dict) -> None:
                 thr.start()
                 thr.join()
 
+            # кулдаун между кругами цикла
             await asyncio.sleep(delay)
 
             counter_laps += 1

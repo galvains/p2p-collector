@@ -1,0 +1,54 @@
+# List of proxy servers
+proxies:
+  -   name: NAME # country
+      user: USER # login
+      pass: PASSWORD # password
+      url: http://example.com # url
+
+  -   name: NAME
+      user: USER
+      pass: PASSWORD
+      url: http://example2.com
+
+
+# List of tickets for parsing by exchanges
+tickets:
+  - - USDT # coin
+    - USD # fiat
+    - BUY # type trade
+
+  - - BTC
+    - EUR
+    - SELL
+
+  - - USDC
+    - USD
+    - BUY
+
+# Pause between parsing rounds | normal:(35, 40)
+delay:
+  - 35 # lower
+  - 40 # upper
+
+# Limit of connections to the exchange per unit of time | normal:(25, 29)
+limit:
+  - 23 # lower
+  - 26 # upper
+
+# Page (request) limit for one thread | normal:(150 - 160)
+limit_requests: 130
+
+# Limit of accesses to the exchange in one thread | normal:(4 - 5)
+limit_exchange: 4
+
+# Parity of the circle at which to reload the threads.data | normal:(20)
+lap_of_reload: 20
+
+# Number of pages if the limit is exceeded
+page_limit: 50
+
+# Mode
+DEBUG: True
+
+
+

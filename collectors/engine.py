@@ -5,7 +5,7 @@ import aiohttp
 from loguru import logger
 from fake_useragent import UserAgent
 from db_model.interface_db import db_insert
-from utils.methods import pay_method_bybit, coin_paxful, type_trade_bybit
+from utils.methods import pay_method_bybit, coin_paxful, type_trade_bybit, trade_type_converter
 
 
 async def p2p_parser_binance(session: aiohttp.ClientSession, url: str, headers: dict,
@@ -22,7 +22,7 @@ async def p2p_parser_binance(session: aiohttp.ClientSession, url: str, headers: 
             data = dict()
             data['currency'] = json_data['fiat']
             data['coin'] = json_data['asset']
-            data['trade_type'] = json_data['tradeType']
+            data['trade_type'] = trade_type_converter(json_data['tradeType'])
             data['exchange_id'] = 1
 
             for element in cards:
@@ -69,7 +69,7 @@ async def p2p_parser_bybit(session: aiohttp.ClientSession, url: str, headers: di
             data = dict()
             data['currency'] = json_data['currencyId']
             data['coin'] = json_data['tokenId']
-            data['trade_type'] = type_trade
+            data['trade_type'] = trade_type_converter(type_trade)
             data['exchange_id'] = 2
 
             for element in cards:
@@ -114,6 +114,7 @@ async def p2p_parser_paxful(session: aiohttp.ClientSession, url: str, headers: d
             cards = loader['data']
 
             data = json_data
+            data['trade_type'] = trade_type_converter(data['trade_type'])
 
             for element in cards:
                 exchange_rate = element['fiatPricePerBtc']

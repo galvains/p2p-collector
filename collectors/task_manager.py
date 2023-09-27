@@ -9,6 +9,8 @@ from utils.methods import type_trade_bybit
 
 async def manager(conf_data: dict) -> dict:
     try:
+
+        # запросы к биржам, для получения кол-ва страниц (тасков)
         tickets = conf_data['tickets']
         data = {'urls': ['https://p2p.binance.com/bapi/c2c/v2/friendly/c2c/adv/search',
                          'https://api2.bybit.com/fiat/otc/item/online'],
@@ -83,16 +85,20 @@ async def req_to_exchange(data: dict, info: dict, thr) -> list:
 
 async def distributor(conf_data: dict) -> None:
     try:
+
+        # проверка лимитов на количество запросов к бирже в треде
         limit_requests = conf_data['limit_requests']
         limit_exchange = conf_data['limit_exchange']
         _DEBUG = conf_data['DEBUG']
 
+        # запуск менеджера для создания тред_даты
         data = await manager(conf_data=conf_data)
 
         result_bin = [[]]
         result_byb = [[]]
         result_pax = [[]]
 
+        # сортировка данных по тредам исходя из лимитов
         for exchange in data:
             counter = 0
             limit_r = limit_requests
@@ -125,12 +131,18 @@ async def distributor(conf_data: dict) -> None:
 
         thr = [result_bin, result_byb, result_pax]
         len_tasks = max(len(result_bin), len(result_byb), len(result_pax))
+        count_of_proxy = len(conf_data['proxies'])
+
         if _DEBUG:
             logger.debug(f'Count of threads: {len_tasks}.')
-        for thread in thr:
-            while len(thread) < len_tasks:
-                thread.append(list())
+        if count_of_proxy >= len_tasks:
+            for thread in thr:
+                while len(thread) < len_tasks:
+                    thread.append(list())
+        else:
+            pass
 
+        # битовая запись конфигурации тредов
         with open('threads.data', 'wb') as file:
             pickle.dump(thr, file)
 

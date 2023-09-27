@@ -5,7 +5,7 @@ from loguru import logger
 import collectors.launcher as launcher
 
 logger.add('debug.log', format='{time} | {level} | {message}', level='DEBUG',
-           rotation='5 mb', compression='zip')
+           rotation='20 mb', compression='zip')
 
 
 async def startup():
