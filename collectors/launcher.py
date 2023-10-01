@@ -12,7 +12,7 @@ from utils.proxies import set_proxy
 from db_model.cleaner import db_clean
 from collectors.task_manager import distributor
 
-from .engine import distributor_binance, distributor_paxful, distributor_bybit
+from .engine import distributor_binance, distributor_paxful, distributor_bybit, distributor_okx
 from utils.methods import get_payment_methods
 
 
@@ -48,6 +48,9 @@ class TaskManager(object):
                         if i == 2:
                             asyncio.create_task(distributor_paxful(coin, fiat, trade, self.proxy, conn, limit)),
                             logger.debug(f'create-task-paxful | {coin, fiat, trade, self.proxy["name"]}')
+                        if i == 3:
+                            asyncio.create_task(distributor_okx(coin, fiat, trade, self.proxy, conn, limit)),
+                            logger.debug(f'create-task-okx | {coin, fiat, trade, self.proxy["name"]}')
                     else:
                         if i == 0:
                             asyncio.create_task(
@@ -56,6 +59,8 @@ class TaskManager(object):
                             asyncio.create_task(distributor_bybit(coin, fiat, trade, self.proxy, conn, limit, pg_limit))
                         if i == 2:
                             asyncio.create_task(distributor_paxful(coin, fiat, trade, self.proxy, conn, limit)),
+                        if i == 3:
+                            asyncio.create_task(distributor_okx(coin, fiat, trade, self.proxy, conn, limit))
 
             if _DEBUG:
                 logger.debug(f'db-connect-closed | {self.proxy["name"], self.proxy["url"]}')
@@ -91,7 +96,7 @@ async def loader(conf_data: dict) -> None:
             # запуск дистрибьютора (на первый круг и кратный указанному в конфигурации)
             if counter_laps == 1 or counter_laps % lap_of_reload == 0:
                 get_payment_methods()
-                await distributor(conf_data=conf_data)
+                await distributor(conf_data=conf_data, counter_to_change=1)
 
             # конфиг тредов (из дистрибьютора)
             with open('threads.data', 'rb') as file:
@@ -104,11 +109,12 @@ async def loader(conf_data: dict) -> None:
             bin_tasks = threads_data[0]
             byb_tasks = threads_data[1]
             pax_tasks = threads_data[2]
-            len_tasks = max(len(bin_tasks), len(byb_tasks), len(pax_tasks))
+            okx_tasks = threads_data[2]
+            len_tasks = max(len(bin_tasks), len(byb_tasks), len(pax_tasks), len(okx_tasks))
 
             # создание объектов таск_менеджера (bin, byb, pax | bin, byb ...)
             for elem in range(len_tasks):
-                data = (bin_tasks[elem], byb_tasks[elem], pax_tasks[elem])
+                data = (bin_tasks[elem], byb_tasks[elem], pax_tasks[elem], okx_tasks[elem])
                 thr_list.append(TaskManager(proxy_data=proxies[elem], threads_data=data, number=elem))
 
             for elem in thr_list:
@@ -122,4 +128,4 @@ async def loader(conf_data: dict) -> None:
             counter_laps += 1
 
         except Exception as ex:
-            logger.error(f'LOADER | {ex}')
+            logger.error(ex)

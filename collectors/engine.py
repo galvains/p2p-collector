@@ -143,6 +143,49 @@ async def p2p_parser_paxful(session: aiohttp.ClientSession, url: str, headers: d
         logger.error(f'Parser-Paxful | ClientProxyConnectionError | {ex}')
 
 
+async def p2p_parser_okx(session: aiohttp.ClientSession, url: str, headers: dict,
+                         json_data: dict, proxy: dict, connect):
+    try:
+        proxy_auth = aiohttp.BasicAuth(proxy['user'], proxy['pass'])
+        async with session.get(url, headers=headers, ssl=False,
+                               proxy_auth=proxy_auth, proxy=proxy['url']) as response_session:
+            assert response_session.status == 200
+
+            loader = await response_session.json()
+            data = json_data
+            cards = loader['data'][data["trade_type"].lower()]
+
+            for element in cards:
+                data['trade_type'] = trade_type_converter(data['trade_type'])
+
+                data['price'] = float(element['price'])
+                data['nick_name'] = element['nickName']
+                data['orders'] = element['completedOrderQuantity']
+                data['link'] = f"https://www.okx.com/ru/p2p/ads-merchant?publicUserId={element['publicUserId']}"
+                data['available'] = float(element['availableAmount'])
+                data['max_limit'] = float(element['quoteMaxAmountPerOrder'])
+                data['min_limit'] = float(element['quoteMinAmountPerOrder'])
+                data['rate'] = round(100 * float(element['completedRate']), 2)
+                data['pay_methods'] = []
+
+                for method in element['paymentMethods']:
+                    data['pay_methods'].append(method)
+
+            db_insert(connection=connect, data=data)
+            # print(data)
+
+    except AssertionError:
+        pass
+    except ConnectionError as ex:
+        logger.error('ConnectionError')
+    except TimeoutError:
+        logger.error('Parser-OKX | TimeoutError')
+    except aiohttp.client_exceptions.ClientOSError as ex:
+        logger.error(f'Parser-OKX | ClientOSError | {ex}')
+    except aiohttp.client_exceptions.ClientProxyConnectionError as ex:
+        logger.error(f'Parser-OKX | ClientProxyConnectionError | {ex}')
+
+
 async def distributor_binance(coin: str, currency: str, type_trade: str, proxy: dict, connect, limit, pg_limit) -> None:
     try:
         url = 'https://p2p.binance.com/bapi/c2c/v2/friendly/c2c/adv/search'
@@ -267,3 +310,32 @@ async def distributor_paxful(coin: str, currency: str, type_trade: str, proxy: d
 
     except Exception as ex:
         logger.error(f'Dist-Paxful | {ex}')
+
+
+async def distributor_okx(coin: str, currency: str, type_trade: str, proxy: dict, connect, limit) -> None:
+    try:
+
+        url = f"https://www.okx.com/v3/c2c/tradingOrders/books?quoteCurrency={currency}&baseCurrency={coin}&" \
+              f"side={type_trade}&paymentMethod=all&userType=all&showTrade=false&showFollow=false&" \
+              f"showAlreadyTraded=false&isAbleFilter=false&hideOverseasVerificationAds=false&sortType=price_asc"
+
+        ua = UserAgent()
+        headers = {'Accept': 'application/json', 'Content-Type': 'application/json', 'User-Agent': str(ua.random)}
+
+        data = dict()
+        data['currency'] = currency
+        data['coin'] = coin
+        data['trade_type'] = type_trade
+        data['exchange_id'] = 4
+
+        connector = aiohttp.TCPConnector(limit=limit)
+        async with aiohttp.ClientSession(connector=connector, trust_env=True) as session:
+            await p2p_parser_okx(session, url=url, headers=headers, json_data=data, proxy=proxy, connect=connect)
+
+    except AssertionError:
+        pass
+    except TimeoutError as ex:
+        logger.error(f'Dist-OKX | {ex}')
+    except (aiohttp.client_exceptions.ClientOSError, aiohttp.client_exceptions.ServerDisconnectedError,
+            aiohttp.client_exceptions.ClientHttpProxyError) as ex:
+        logger.error(f'Dist-OKX | {ex}')

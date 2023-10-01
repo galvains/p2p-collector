@@ -19,21 +19,25 @@ async def manager(conf_data: dict) -> dict:
 
         tasks = list()
         thr = dict()
-        thr['binance'], thr['bybit'], thr['paxful'] = list(), list(), list()
+        thr['binance'], thr['bybit'], thr['paxful'], thr['okx'] = list(), list(), list(), list()
         for req in tickets:
             data_bin = {"page": 1, "rows": 10, "asset": req[0], "fiat": req[1], "tradeType": req[2]}
             data_byb = {"tokenId": req[0], "currencyId": req[1], "side": type_trade_bybit(req[2]), "page": "1"}
             data_pax = {"coin": req[0], "fiat": req[1], "trade_type": req[2]}
+            data_okx = {"coin": req[0], "currency": req[1], "trade_type": req[2]}
 
-            task_1 = asyncio.create_task(req_to_exchange(data=data, info=data_bin, thr=thr))
+            task_1 = asyncio.create_task(req_to_binance(data=data, info=data_bin, thr=thr))
             tasks.append(task_1)
 
-            task_2 = asyncio.create_task(req_to_exchange(data=data, info=data_byb, thr=thr))
+            task_2 = asyncio.create_task(req_to_bybit(data=data, info=data_byb, thr=thr))
             tasks.append(task_2)
-
+            #
             if not req[0] == 'ETH':
-                task_3 = asyncio.create_task(req_to_exchange(data=data, info=data_pax, thr=thr))
+                task_3 = asyncio.create_task(req_to_paxful(info=data_pax, thr=thr))
                 tasks.append(task_3)
+
+            task_4 = asyncio.create_task(req_to_okx(info=data_okx, thr=thr))
+            tasks.append(task_4)
 
         await asyncio.gather(*tasks)
         return thr
@@ -42,48 +46,62 @@ async def manager(conf_data: dict) -> dict:
         logger.error(f'Task Manager - manager | {ex}')
 
 
-async def req_to_exchange(data: dict, info: dict, thr) -> list:
+async def req_to_binance(data: dict, info: dict, thr) -> list:
     try:
         async with aiohttp.ClientSession() as session:
             proxy_auth = aiohttp.BasicAuth(data['proxy'][0]['user'], data['proxy'][0]['pass'])
-
-            # binance
-            if 'asset' in info:
-                async with session.post(url=data['urls'][0], headers=data['headers'], json=info,
-                                        proxy_auth=proxy_auth, proxy=data['proxy'][0]['url'], ssl=False) as r_bin:
-                    assert r_bin.status == 200
-                    loader = await r_bin.json()
-                    pagination = int(loader['total'])
-                    if pagination:
-                        pagination = pagination // 10 + 1
-                        thr['binance'].append({pagination: [info['asset'], info['fiat'], info['tradeType']]})
-
-            # bybit
-            elif 'tokenId' in info:
-                async with session.post(url=data['urls'][1], headers=data['headers'], json=info,
-                                        proxy_auth=proxy_auth, proxy=data['proxy'][0]['url'], ssl=False) as r_byb:
-                    assert r_byb.status == 200
-                    loader = await r_byb.json()
-                    pagination = loader['result']['count']
-                    if pagination:
-                        pagination = pagination // 10 + 1
-                        thr['bybit'].append({pagination: [info['tokenId'], info['currencyId'],
-                                                          type_trade_bybit(info['side'])]})
-
-            # paxful
-            else:
-                pagination = 1
-                thr['paxful'].append({pagination: [info['coin'], info['fiat'], (info['trade_type'])]})
+            async with session.post(url=data['urls'][0], headers=data['headers'], json=info,
+                                    proxy_auth=proxy_auth, proxy=data['proxy'][0]['url'], ssl=False) as response:
+                assert response.status == 200
+                loader = await response.json()
+                pagination = int(loader['total'])
+                if pagination:
+                    pagination = pagination // 10 + 1
+                    thr['binance'].append({pagination: [info['asset'], info['fiat'], info['tradeType']]})
 
         return thr
-
-    except AssertionError:
-        logger.error('req_to_exchange | AssertionError')
     except Exception as ex:
-        logger.error(f'Task Manager - req_to_exchange | {ex}')
+        logger.error(f'req_to_binance | {ex}')
 
 
-async def distributor(conf_data: dict) -> None:
+async def req_to_bybit(data: dict, info: dict, thr) -> list:
+    try:
+        async with aiohttp.ClientSession() as session:
+            proxy_auth = aiohttp.BasicAuth(data['proxy'][0]['user'], data['proxy'][0]['pass'])
+            async with session.post(url=data['urls'][1], headers=data['headers'], json=info,
+                                    proxy_auth=proxy_auth, proxy=data['proxy'][0]['url'], ssl=False) as response:
+                assert response.status == 200
+                loader = await response.json()
+                pagination = loader['result']['count']
+                if pagination:
+                    pagination = pagination // 10 + 1
+                    thr['bybit'].append({pagination: [info['tokenId'], info['currencyId'],
+                                                      type_trade_bybit(info['side'])]})
+
+        return thr
+    except Exception as ex:
+        logger.error(f'req_to_bybit| {ex}')
+
+
+async def req_to_paxful(info: dict, thr) -> list:
+    try:
+        thr['paxful'].append({1: [info['coin'], info['fiat'], (info['trade_type'])]})
+
+        return thr
+    except Exception as ex:
+        logger.error(f'req_to_paxful | {ex}')
+
+
+async def req_to_okx(info: dict, thr) -> list:
+    try:
+        thr['okx'].append({1: [info['coin'], info['currency'], (info['trade_type'])]})
+
+        return thr
+    except Exception as ex:
+        logger.error(f'req_to_okx | {ex}')
+
+
+async def distributor(conf_data: dict, counter_to_change: int) -> None:
     try:
 
         # проверка лимитов на количество запросов к бирже в треде
@@ -97,6 +115,7 @@ async def distributor(conf_data: dict) -> None:
         result_bin = [[]]
         result_byb = [[]]
         result_pax = [[]]
+        result_okx = [[]]
 
         # сортировка данных по тредам исходя из лимитов
         for exchange in data:
@@ -113,9 +132,12 @@ async def distributor(conf_data: dict) -> None:
                         elif exchange == 'bybit':
                             result_byb.append(list())
                             result_byb[counter].append(val)
-                        else:
+                        elif exchange == 'paxful':
                             result_pax.append(list())
                             result_pax[counter].append(val)
+                        elif exchange == 'okx':
+                            result_okx.append(list())
+                            result_okx[counter].append(val)
                         limit_r = limit_requests - key
                         limit_e = limit_exchange - 1
 
@@ -124,13 +146,15 @@ async def distributor(conf_data: dict) -> None:
                             result_bin[counter].append(val)
                         elif exchange == 'bybit':
                             result_byb[counter].append(val)
-                        else:
+                        elif exchange == 'paxful':
                             result_pax[counter].append(val)
+                        elif exchange == 'okx':
+                            result_okx[counter].append(val)
                         limit_r -= key
                         limit_e -= 1
 
-        thr = [result_bin, result_byb, result_pax]
-        len_tasks = max(len(result_bin), len(result_byb), len(result_pax))
+        thr = [result_bin, result_byb, result_pax, result_okx]
+        len_tasks = max(len(result_bin), len(result_byb), len(result_pax), len(result_okx))
         count_of_proxy = len(conf_data['proxies'])
 
         if _DEBUG:
@@ -139,12 +163,22 @@ async def distributor(conf_data: dict) -> None:
             for thread in thr:
                 while len(thread) < len_tasks:
                     thread.append(list())
-        else:
-            pass
 
-        # битовая запись конфигурации тредов
-        with open('threads.data', 'wb') as file:
-            pickle.dump(thr, file)
+            # битовая запись конфигурации тредов
+            with open('threads.data', 'wb') as file:
+                pickle.dump(thr, file)
+
+        # если тредов больше чем прокси, увеличивается лимит запросов и кол-во бирж в треде
+        else:
+            conf_data['limit_requests'] = limit_requests + 5
+
+            if counter_to_change % 5 == 0:
+                conf_data['limit_exchange'] = limit_exchange + 1
+
+            counter_to_change += 1
+            logger.info(f"The configuration of the threads has been changed | "
+                        f"limit_requests: {conf_data['limit_requests']}, limit_exchange: {conf_data['limit_exchange']}")
+            await distributor(conf_data=conf_data, counter_to_change=counter_to_change)
 
     except Exception as ex:
         logger.error(f'Task Manager - distributor | {ex}')

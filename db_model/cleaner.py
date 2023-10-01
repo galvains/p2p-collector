@@ -5,7 +5,7 @@ def db_clean(connection) -> None:
     try:
         with connection.cursor() as cursor:
             cursor.execute(f"""
-                    DELETE FROM tickets
+                    DELETE FROM app_ticketstable
                     WHERE time_create < (NOW() - interval '1 minute');""")
 
             connection.commit()
