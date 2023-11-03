@@ -172,7 +172,6 @@ async def p2p_parser_okx(session: aiohttp.ClientSession, url: str, headers: dict
                     data['pay_methods'].append(method)
 
             db_insert(connection=connect, data=data)
-            # print(data)
 
     except AssertionError:
         pass

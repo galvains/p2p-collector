@@ -1,10 +1,14 @@
---CREATE DATABASE collector;
-CREATE TABLE exchanges (
+CREATE TABLE app_exchangetable (
     id smallserial primary key not null,
     name varchar(10)
 );
 
-CREATE TABLE tickets (
+INSERT INTO app_exchangetable(id, name) VALUES (1, 'Binance');
+INSERT INTO app_exchangetable(id, name) VALUES (2, 'Bybit');
+INSERT INTO app_exchangetable(id, name) VALUES (3, 'Paxful');
+INSERT INTO app_exchangetable(id, name) VALUES (4, 'OKX');
+
+CREATE TABLE app_ticketstable (
     nick_name varchar(50) not null,
     price numeric not null,
     orders numeric not null,
@@ -18,6 +22,5 @@ CREATE TABLE tickets (
     trade_type boolean not null,
     link text not null,
     time_create timestamp not null,
-    exchange_id int references exchanges (id) not null
+    exchange_id int references app_exchangetable (id) not null
 );
-

@@ -95,7 +95,7 @@ async def loader(conf_data: dict) -> None:
 
             # запуск дистрибьютора (на первый круг и кратный указанному в конфигурации)
             if counter_laps == 1 or counter_laps % lap_of_reload == 0:
-                get_payment_methods()
+                await get_payment_methods()
                 await distributor(conf_data=conf_data, counter_to_change=1)
 
             # конфиг тредов (из дистрибьютора)

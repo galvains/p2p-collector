@@ -1,8 +1,9 @@
 import json
 import requests
+import asyncio
 
 
-def get_payment_methods():
+async def get_payment_methods():
     url = "https://api2.bybit.com/fiat/otc/configuration/queryAllPaymentList"
     response = requests.post(url).json()
     tickets = response['result']['paymentConfigVo']

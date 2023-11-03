@@ -1,0 +1,6 @@
+venv
+.idea
+.log
+__pycache__
+core/configuration.yaml
+.DS_Store
