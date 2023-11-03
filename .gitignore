@@ -2,5 +2,6 @@ venv
 .idea
 .log
 __pycache__
+docker-compose.yml
 core/configuration.yaml
 .DS_Store
